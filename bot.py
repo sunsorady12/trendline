@@ -21,7 +21,6 @@ async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         pair = context.args[0].lower()
-        # Handle pairs with or without dash
         if '-' in pair:
             symbol, currency = pair.split('-')
         else:
