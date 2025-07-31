@@ -3,11 +3,10 @@ import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Configuration - use Render's environment variables
+# Configuration
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 COINGECKO_API = "https://api.coingecko.com/api/v3"
-PORT = int(os.environ.get('PORT', 5000))  # For Render web service
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -23,11 +22,14 @@ async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         pair = context.args[0].lower()
         # Handle pairs with or without dash
-        symbol, currency = pair.split('-') if '-' in pair else (pair, 'usd')
+        if '-' in pair:
+            symbol, currency = pair.split('-')
+        else:
+            symbol, currency = pair, 'usd'
         
         data = get_crypto_data(symbol, currency)
         if not data:
-            await update.message.reply_text("❌ Failed to fetch market data for that pair")
+            await update.message.reply_text(f"❌ Failed to fetch market data for {symbol.upper()}/{currency.upper()}")
             return
         
         # Generate analysis prompt
@@ -62,6 +64,7 @@ def get_crypto_data(symbol: str, currency: str):
             'price_change_percentage': '7d'
         }
         response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
         data = response.json()
         return data[0] if data else None
     except Exception as e:
@@ -86,8 +89,9 @@ def get_deepseek_analysis(prompt: str):
             "https://api.deepseek.ai/v1/chat/completions",
             headers=headers,
             json=payload,
-            timeout=15
+            timeout=20
         )
+        response.raise_for_status()
         return response.json()['choices'][0]['message']['content']
     except Exception as e:
         print(f"DeepSeek API error: {str(e)}")
@@ -101,11 +105,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("analyze", analyze))
     
-    # Configure for Render
-    print("🤖 Starting bot...")
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=TELEGRAM_TOKEN,
-        webhook_url=f"https://your-render-app-name.onrender.com/{TELEGRAM_TOKEN}"
-    )
+    print("🤖 Starting bot with polling method...")
+    app.run_polling()
